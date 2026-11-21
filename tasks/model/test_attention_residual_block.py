@@ -1,0 +1,38 @@
+import torch
+
+from tasks.model.attention_residual_block import AttentionResidualBlock
+
+torch.manual_seed(42)
+
+batch_size = 2
+sequence_length = 5
+embedding_dim = 128
+num_heads = 4
+
+x = torch.randn(
+    batch_size,
+    sequence_length,
+    embedding_dim,
+    requires_grad=True
+)
+
+block = AttentionResidualBlock(
+    embedding_dim=embedding_dim,
+    num_heads=num_heads
+)
+
+
+output = block(x)
+
+print("Input shape:", x.shape)
+print("Output shape:", output.shape)
+
+assert output.shape == x.shape
+
+loss = output.mean()
+loss.backward()
+
+assert x.grad is not None
+
+print("Input gradients calculated:", x.grad is not None)
+print("All tests passed!")
