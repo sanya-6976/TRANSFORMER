@@ -35,4 +35,33 @@ def get_batch(
             "batch_size and block_size must be positive"
         )
 
-    
+    # We need at least block_size + 1 tokens
+    # because every input token needs a next-token target.
+    if len(data) <= block_size:
+        raise ValueError(
+            "Dataset must contain more tokens than block_size"
+        )
+
+    # randomly select starting position 
+    start_positions = torch.randint(
+    low=0,
+    high=len(data) - block_size,
+    size=(batch_size,)      
+    )
+
+    #build input an dtarget sequence 
+    x = torch.stack([
+        data[start:start + block_size]
+        for start in start_positions
+    ])
+
+    y = torch.stack([
+        data[start + 1:start + block_size + 1]
+        for start in start_positions
+    ])
+
+     # Move batches to the requested device.
+    x = x.to(device)
+    y = y.to(device)
+
+    return x, y
