@@ -3,7 +3,8 @@ import torch
 
 from tasks.data.batch_loader import get_batch
 from tasks.model.language_model_loss import LanguageModelLoss
-
+from tasks.training.checkpoint import save_checkpoint
+from tasks.training.plot_loss import plot_loss
 
 # ==================================================
 # 1. ESTIMATE TRAINING / VALIDATION LOSS
@@ -80,7 +81,10 @@ def train_model(
     eval_interval=100,
     eval_iters=20,
     device="cpu",
-    max_grad_norm=1.0
+    max_grad_norm=1.0,
+    latest_checkpoint_path="checkpoints/latest_checkpoint.pt",
+    best_checkpoint_path="checkpoints/best_checkpoint.pt",
+    loss_plot_path="outputs/training_loss.png"
 ):
 
     if max_steps <= 0:
@@ -96,14 +100,32 @@ def train_model(
             "batch_size and block_size must be positive"
         )
 
+    if max_grad_norm <= 0:
+        raise ValueError(
+            "max_grad_norm must be positive"
+        )
+
     model.train()
 
     loss_function = LanguageModelLoss()
 
     history = []
 
+    # Track the lowest validation loss.
+    best_val_loss = float("inf")
+
+    # Store training configuration.
+    config = {
+        "batch_size": batch_size,
+        "block_size": block_size,
+        "max_steps": max_steps,
+        "eval_interval": eval_interval,
+        "eval_iters": eval_iters,
+        "max_grad_norm": max_grad_norm
+    }
+
     # ==================================================
-    # REPEAT TRAINING STEPS
+    # 3. REPEAT TRAINING STEPS
     # ==================================================
 
     for step in range(max_steps):
@@ -116,7 +138,7 @@ def train_model(
             device=device
         )
 
-        # 2. Clear gradients from the previous step.
+        # 2. Clear previous gradients.
         optimizer.zero_grad(set_to_none=True)
 
         # 3. Forward pass.
@@ -138,7 +160,7 @@ def train_model(
         optimizer.step()
 
         # ==================================================
-        # VALIDATION
+        # 4. VALIDATION AND CHECKPOINT SAVING
         # ==================================================
 
         if step % eval_interval == 0 or step == max_steps - 1:
@@ -167,6 +189,69 @@ def train_model(
                 f"Validation Loss: {losses['val']:.4f}"
             )
 
+            # ------------------------------------------
+            # SAVE LATEST CHECKPOINT
+            # ------------------------------------------
+
+            save_checkpoint(
+                model=model,
+                optimizer=optimizer,
+                step=step,
+                history=history,
+                path=latest_checkpoint_path,
+                config=config
+            )
+
+            # ------------------------------------------
+            # SAVE BEST CHECKPOINT
+            # ------------------------------------------
+
+            if losses["val"] < best_val_loss:
+
+                best_val_loss = losses["val"]
+
+                save_checkpoint(
+                    model=model,
+                    optimizer=optimizer,
+                    step=step,
+                    history=history,
+                    path=best_checkpoint_path,
+                    config=config
+                )
+
+                print(
+                    f"New best model! "
+                    f"Validation Loss: {best_val_loss:.4f}"
+                )
+
+            # ------------------------------------------
+            # UPDATE LOSS GRAPH
+            # ------------------------------------------
+
+            plot_loss(
+                history=history,
+                save_path=loss_plot_path
+            )
+
     print("\nTraining completed!")
+
+    print(
+        f"Best validation loss: {best_val_loss:.4f}"
+    )
+
+    print(
+        "Latest checkpoint:",
+        latest_checkpoint_path
+    )
+
+    print(
+        "Best checkpoint:",
+        best_checkpoint_path
+    )
+
+    print(
+        "Loss graph:",
+        loss_plot_path
+    )
 
     return history
